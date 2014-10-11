@@ -108,13 +108,16 @@
       ;;(format t "tile: ~S ~S ~S ~S ~d~%" x y n1 n2 cnt)
       (let ((tile (make-tile :name n1 :type n2 :x x :y y 
 			     :prim-sites nil)))
-	(loop for expr in exprs
-	   for i from 0 to (1- cnt)
-	   do ;; parse primitive sites 
-             (cons (tile-prim-sites tile)
-		   (parse-xdlrc expr dev tile)))
+	(setf (tile-prim-sites tile) 
+	      (cons (loop for expr in exprs
+		       for i from 0 to (1- cnt)
+		       for j = (parse-xdlrc expr dev tile)
+		       collect j)
+		    (tile-prim-sites tile)))
+	
 	(set n1 tile) ;BIND to name
 )))
+
 ;;==============================================================================
 ;; PRIMITIVE_SITE                 LEAF of TILE
 ;;
@@ -202,7 +205,9 @@
 		 :conns nil)))
       (loop for expr in exprs
 	 do (parse-xdlrc expr dev data ))
-      data)))
+      (setf (prim-def-elements primdef)
+	    (cons data (prim-def-elements primdef)))
+      nil)))
 
 ;;==============================================================================
 ;; CONN element pin dir element pin   for ELEMENT
