@@ -26,8 +26,8 @@ To see hashtables, use
 
 Now you can
 
-(gethash 'RL_X1Y3 (tile-prim-sites R22C1))
+(gethash 'RLL_X1Y3 (tile-prim-sites R22C1))
 
-Of course, you can just type RL_X1Y3 since primitive sites are values of their symbols...
+Of course, you can just type RLL_X1Y3 since primitive sites are values of their symbols...
 
 
