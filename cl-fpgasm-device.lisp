@@ -49,23 +49,11 @@
  ;;(maphash #'(lambda (key val) (print key) ) hashtable)
 )
 
-;;==============================================================================
-;; PUBLIC INTERFACE
-;;==============================================================================
-(defun get-tile-at (x y)
-  "get a tile at x y location"
-  (aref (dev-tiles *dev*) x y))
-;;==============================================================================
-(defun get-prim-def (name)
-  "get a prim-def by name"
-  (gethash name (dev-prim-defs *dev*)))
-;;==============================================================================
-(defun get-element (name &key of) ;of is prim-def
-  (gethash name (prim-def-elements of)))
-
 
 ;;==============================================================================
 ;; PARSING
+;;
+;; Parsing rules: every object parses children and stores them as it needs to.
 ;;==============================================================================
 (defun dev-init () 
   (setf *dev* (make-dev :name nil :tech nil :tiles nil :prim-defs nil)))
@@ -102,11 +90,15 @@
 ;;
 (defmethod parse-xdlrc-expr ((type (eql 'tiles)) rest dev unused)
     (destructuring-bind (x y &rest exprs) rest
-      (setf (dev-tiles dev) (make-array (list x y)))
-      (loop for expr in exprs
-	 for i from 0
-	 do (parse-xdlrc expr dev)) 
-  	))
+      (let ((array (make-array (list x y))))
+       	(loop for expr in exprs
+	   for i from 0
+	   do 
+	     (let ((tile (parse-xdlrc expr))) ;parse a tile
+	       (setf (aref array (tile-x tile) (tile-y tile) )
+		     tile)))
+	(setf (dev-tiles dev) array) ;???
+)))
 
 ;;==============================================================================
 ;; TILE x y n1 n2 cnt (          of TILES
@@ -115,18 +107,12 @@
     (destructuring-bind (x y n1 n2 cnt &rest exprs) rest
       ;;(format t "tile: ~S ~S ~S ~S ~d~%" x y n1 n2 cnt)
       (let ((tile (make-tile :name n1 :type n2 :x x :y y 
-			     :prim-sites (make-hash-table :size cnt))))
+			     :prim-sites nil)))
 	(loop for expr in exprs
 	   for i from 0 to (1- cnt)
 	   do ;; parse primitive sites 
-	     (let ((primsite (parse-xdlrc expr dev tile)))
-	       ;;and store into the hashtable 
-	       (setf 
-		(gethash (prim-site-name primsite) (tile-prim-sites tile))
-		primsite)))
-       
-	;store right into the array)
-	(setf (aref (dev-tiles dev) x y) tile)
+             (cons (tile-prim-sites tile)
+		   (parse-xdlrc expr dev tile)))
 	(set n1 tile) ;BIND to name
 )))
 ;;==============================================================================
@@ -138,7 +124,7 @@
       (declare (ignore cnt))
       (let ((data (make-prim-site 
 		   :name n1 
-		   :prim-def (gethash n2 (dev-prim-defs dev))  
+		   :prim-def n2  
 		   :bond n3
 		   :tile tile)))
 	(set n1 data)) ;BIND to name
@@ -152,11 +138,11 @@
 ;; hashtable containing prim-def entries
 (defmethod parse-xdlrc-expr ((type (eql 'PRIMITIVE_DEFS)) rest dev unused)
   (destructuring-bind (cnt &rest exprs) rest
-    ;;create the dev's hashtable!
-    (setf (dev-prim-defs dev) (make-hash-table :size cnt))
-    (loop for expr in exprs
-       for i from 0
-       do (parse-xdlrc expr dev)) ))
+    (declare (ignore cnt))
+    (setf (dev-prim-defs dev) (loop for expr in exprs
+				 for i from 0
+				 for j = (parse-xdlrc expr dev)
+				 collect j)) ))
 
 ;;==============================================================================
 ;; PRIMITIVE_DEF name pins elements (...
@@ -165,17 +151,16 @@
 
 (defmethod parse-xdlrc-expr ((type (eql 'PRIMITIVE_DEF)) rest dev unused)
   (destructuring-bind (name pin-cnt element-cnt &rest exprs) rest
+    (declare (ignore pin-cnt) (ignore element-cnt))
     ;;(format t "PRIMITIVE_DEF ~S...~%" name)
     (let ((data (make-prim-def 
 		 :name name
-		 :pins (make-hash-table :size pin-cnt)
-		 :elements (make-hash-table :size element-cnt))))
+		 :pins  nil
+		 :elements nil)))
       (loop for expr in exprs
 	 do (parse-xdlrc expr dev data))
-      ;; now insert data into the prim-defs hasthable
-      (setf (gethash name (dev-prim-defs dev)) data)
       (set name data) ;BIND to name
-)))
+      data)))
 
 
 
@@ -192,11 +177,13 @@
        ;;parsers for ELEMENT and PRIMITIVE_DEF???
        (if (not (eql n1 name))
 	   (error "ELEMENT-PIN parser found a name mismatch"))
-       (setf (gethash name (prim-def-pins container)) dir)))
+       (setf (prim-def-pins container)
+	     (cons (cons  name dir) (prim-def-pins container) ))))
     
     ((eql (type-of container) 'element )
      (destructuring-bind (name dir) rest
-       (setf (gethash name (element-pins container)) dir)))))
+       (setf (element-pins container)
+	     (cons (cons name dir) (element-pins container)))))))
 
 ;;==============================================================================
 ;; ELEMENT name pins (...       for PRIMITIVE_DEF
@@ -207,17 +194,15 @@
 ;;
 (defmethod parse-xdlrc-expr ((type (eql 'ELEMENT)) rest dev primdef)
   (destructuring-bind (name pin-cnt &rest exprs) rest
-    ;;(format t "ELEMENT ~S...~%" name)
+    (declare (ignore pin-cnt))    ;;(format t "ELEMENT ~S...~%" name)
     (let ((data (make-element
 		 :name name
-		 :pins (make-hash-table :size pin-cnt)
+		 :pins nil
 		 :cfg nil
 		 :conns nil)))
       (loop for expr in exprs
 	 do (parse-xdlrc expr dev data ))
-      ;;and store it into the primdef structure's elements hashtable
-      (setf (gethash name (prim-def-elements primdef)) data)
-      )))
+      data)))
 
 ;;==============================================================================
 ;; CONN element pin dir element pin   for ELEMENT
@@ -240,3 +225,45 @@
   (if list
       (parse-xdlrc-expr (car list) (cdr list) dev container)))
 
+
+
+
+
+;;==============================================================================
+;; PUBLIC INTERFACE
+;;==============================================================================
+(defun get-tile-at (x y)
+  "get a tile at x y location"
+  (aref (dev-tiles *dev*) x y))
+;;==============================================================================
+(defun get-prim-def (name)
+  "get a prim-def by name"
+  (gethash name (dev-prim-defs *dev*)))
+;;==============================================================================
+(defun get-element (name &key of) ;of is prim-def
+  (gethash name (prim-def-elements of)))
+
+
+(defgeneric show (thing))
+
+(defmethod show ((tile TILE))
+  (format t "TILE (~d,~d) ~S  type ~S  contains prim-sites: "
+	  (tile-x tile) (tile-y tile) (tile-name tile) (tile-type tile))
+  (print (keys (tile-prim-sites tile)))
+  nil
+)
+
+(defmethod show ((pd PRIM-DEF))
+  (format t "PRIM-DEF ~S~%. Pins:" (prim-def-name pd))
+  (print  (keys (prim-def-pins pd)))
+  (format t "~%Elements:")
+  (print (keys (prim-def-elements pd)))
+  nil)
+
+(defmethod show ((ps PRIM-SITE))
+  (format t "PRIM-SITE ~S is a ~S (~S) at tile ~S"
+	  (prim-site-name ps)
+	  (prim-def-name (prim-site-prim-def ps))
+	  (prim-site-bond ps)
+	  (tile-name  (prim-site-tile ps)))
+   nil)
