@@ -1,0 +1,13 @@
+In order for cl-fpgasm-xdlrc to process xdlrc files as s-exps, the following tweaks need to be performed with sed:
+
+1) #<space> comments are eliminated (# is tricky in Lisp)
+
+2) #FF, #LATCH, #RAM, #ROM and #LUT have the # replaced with _, same reason
+
+3) foo:<eqn> forms are replaced with (foo eqn), as : leads to reader problems.
+
+run the shell script tweak:
+
+sh tweak.sh filename    no .xdlrc suffix! 
+
+

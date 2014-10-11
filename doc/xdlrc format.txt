@@ -1,0 +1,51 @@
+XDLRC tags:
+
+XDLRC is a Xilinx format for describing FPGA resources for a particular chip.  An .xdlrc file is produced by running the xdl -report, and will generate descriptions of with various levels of detail depending on flags -pips and -all-conns.
+
+The most basic report profides the following hierarchy, in a s-expr format:
+
+(xdl_resource_report <version> <chip> <technology>
+  (tiles <w> <h>
+    (tile                   ;there are W x H of these
+         <x> <y>            ;x-y coordinate of tile
+         <tile-name>        ;unique tile name
+         <tile-type>        ;may be useful?
+         <prim-site-cnt>    ;count of primitive_site forms
+      (primitive_site       ;0+ of these
+          <prim-site-name>  ;Unique name of primitive site 
+          <prim-def-name>   ;Name of primitive-def (below)
+          <bond>            ;internal, unbonded or bonded
+          <pincnt>          ;count of pins at site
+  )))
+  (primitive_def 
+       <prim-def-name>      ;matches name at sites
+       <pin-cnt>            ;number of pin forms
+       <element-cnt>        ;number of element forms
+    (pin                    ;0+ see <pin-cnt>
+         <n1> <2>           ;two identical names ***
+         <dir>              ;input|output
+    )
+    (element                ;0+ see <el-cnt>
+         <element-name>     ;unique element name
+         <el-pin-cnt>       ;element's pin count
+      (pin                  ;0+ see el-pin-cnt
+         <el-pin-name>      ;el-pin name
+         <dir>              ;input|output
+      )
+      (conn                 ;0+ cnt not known, must parse
+         <conn-el1>         ;enclosing element name
+         <conn-pin1>        ;element's pin
+         <arrows>           ;==> or <==
+         <conn-el2>         ;other element name
+         <conn-pin2>        ;and its pin
+      )
+      (cfg                  ;0 or 1
+         <list>             ;config list            
+ ))))
+ (summary
+  tiles=<tile-cnt>
+  sites=<site-cnt>          ;as there are multiple sites per tile
+  sitedefs=<sited-def-cnt>
+))
+
+*** Primitive_def pin forms have two names fields which seem to be identical.  Perhaps this is to differentiatie primitive_def pins (with 3 parameters) from element pins, which have a single name (and thus 2 parameters).
