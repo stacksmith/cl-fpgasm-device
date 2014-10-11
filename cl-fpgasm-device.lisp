@@ -18,7 +18,7 @@
     along with cl-fpgasm.  If not, see <http://www.gnu.org/licenses/>.
 ******************************************************************************|#
 (in-package #:cl-fpgasm-device)
-
+(setf *print-circle* t)    ;we have circular structures!
 
 (defparameter *raw* nil)   ;raw sexps after reading xdlrc
 (defparameter *dev* nil)
@@ -30,19 +30,24 @@
 ;;==============================================================================
 (defun load-device (&key (name (asdf:system-relative-pathname 'cl-fpgasm-device #p"data/xc3s200.tweaked")))
   (parse-xdlrc (read-file name))
-  *dev*
+  t
 )
 
 (defstruct dev 
   name                  ;name of device
   tech                  ;technology
   tiles                 ;ARRAY of tiles
-  prim                  ;HASHTABLE of primitive-defs
+  prim-defs             ;HASHTABLE of primitive-defs
 ) 
 (defstruct tile name type x y prim-sites)
+(defstruct prim-site name prim-def bond  #||# tile)
 (defstruct prim-def name pins elements)
-(defstruct prim-site name prim-def bond)
-(defstruct element name pins cfg conns)
+(defstruct element name pins cfg conns )
+
+(defun keys (hashtable)
+  (loop for key being the hash-keys of hashtable collect key)
+ ;;(maphash #'(lambda (key val) (print key) ) hashtable)
+)
 
 ;;==============================================================================
 ;; PUBLIC INTERFACE
@@ -53,7 +58,7 @@
 ;;==============================================================================
 (defun get-prim-def (name)
   "get a prim-def by name"
-  (gethash name (dev-prim *dev*)))
+  (gethash name (dev-prim-defs *dev*)))
 ;;==============================================================================
 (defun get-element (name &key of) ;of is prim-def
   (gethash name (prim-def-elements of)))
@@ -63,7 +68,7 @@
 ;; PARSING
 ;;==============================================================================
 (defun dev-init () 
-  (setf *dev* (make-dev :name nil :tech nil :tiles nil :prim nil)))
+  (setf *dev* (make-dev :name nil :tech nil :tiles nil :prim-defs nil)))
 
 ;;==============================================================================
 ;; Generic function. 
@@ -109,25 +114,34 @@
 (defmethod parse-xdlrc-expr ((type (eql 'tile)) rest dev unused)
     (destructuring-bind (x y n1 n2 cnt &rest exprs) rest
       ;;(format t "tile: ~S ~S ~S ~S ~d~%" x y n1 n2 cnt)
-      (let ((tile (make-tile :name n1 :type n2 :x x :y y :prim-sites
-			     ;;TODO: for now primdefs are just a list
-			     (loop for expr in exprs
-				for i from 0 to (1- cnt)
-				for j = (parse-xdlrc expr dev)
-				collect j ))))
+      (let ((tile (make-tile :name n1 :type n2 :x x :y y 
+			     :prim-sites (make-hash-table :size cnt))))
+	(loop for expr in exprs
+	   for i from 0 to (1- cnt)
+	   do ;; parse primitive sites 
+	     (let ((primsite (parse-xdlrc expr dev tile)))
+	       ;;and store into the hashtable 
+	       (setf 
+		(gethash (prim-site-name primsite) (tile-prim-sites tile))
+		primsite)))
+       
 	;store right into the array)
-	(setf (aref (dev-tiles dev) x y) tile))))
+	(setf (aref (dev-tiles dev) x y) tile)
+	(set n1 tile) ;BIND to name
+)))
 ;;==============================================================================
 ;; PRIMITIVE_SITE                 LEAF of TILE
 ;;
-(defmethod parse-xdlrc-expr ((type (eql 'PRIMITIVE_SITE)) rest dev unused)
+(defmethod parse-xdlrc-expr ((type (eql 'PRIMITIVE_SITE)) rest dev tile)
     (destructuring-bind (n1 n2 n3 cnt) rest
       ;;(format t " primitive-site: ~S ~S ~S ~d~%" n1 n2 n3 cnt)
       (declare (ignore cnt))
-      (make-prim-site 
-	  :name n1 
-	  :prim-def (gethash n2 (dev-prim dev))  
-	  :bond n3)
+      (let ((data (make-prim-site 
+		   :name n1 
+		   :prim-def (gethash n2 (dev-prim-defs dev))  
+		   :bond n3
+		   :tile tile)))
+	(set n1 data)) ;BIND to name
       ;;TODO: for now just returning data; tile makes a list...
 ))
 
@@ -139,7 +153,7 @@
 (defmethod parse-xdlrc-expr ((type (eql 'PRIMITIVE_DEFS)) rest dev unused)
   (destructuring-bind (cnt &rest exprs) rest
     ;;create the dev's hashtable!
-    (setf (dev-prim dev) (make-hash-table :size cnt))
+    (setf (dev-prim-defs dev) (make-hash-table :size cnt))
     (loop for expr in exprs
        for i from 0
        do (parse-xdlrc expr dev)) ))
@@ -159,7 +173,9 @@
       (loop for expr in exprs
 	 do (parse-xdlrc expr dev data))
       ;; now insert data into the prim-defs hasthable
-      (setf (gethash name (dev-prim dev)) data))))
+      (setf (gethash name (dev-prim-defs dev)) data)
+      (set name data) ;BIND to name
+)))
 
 
 
