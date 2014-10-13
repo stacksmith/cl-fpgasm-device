@@ -32,6 +32,7 @@
 ;;==============================================================================
 (defun load-device (&key (name (asdf:system-relative-pathname 'cl-fpgasm-device #p"data/xc3s200.tweaked")))
   (parse-xdlrc (read-file name))
+  (export 'devi::*dev* :devi)
   t
 )
 
@@ -118,6 +119,8 @@
 		    (tile-prim-sites tile)))
 	
 	(set n1 tile) ;BIND symbol n1 to name
+	(export n1 :devi)
+	tile
 )))
 
 ;;==============================================================================
@@ -132,7 +135,11 @@
 		   :prim-def n2  
 		   :bond n3
 		   :tile tile)))
-	(set n1 data)) ;BIND to name
+	(set n1 data);BIND to name
+	(export n1 :devi)
+	data
+	) 
+      
       ;;TODO: for now just returning data; tile makes a list...
 ))
 
@@ -165,11 +172,8 @@
       (loop for expr in exprs
 	 do (parse-xdlrc expr dev data))
       (set name data) ;BIND to name
-
-      
-
-      (export (list name) *package* )
- (print "DONE")
+        
+      (export name :devi  )
       data)))
 
 
@@ -244,38 +248,3 @@
 ;;==============================================================================
 ;; PUBLIC INTERFACE
 ;;==============================================================================
-(defun get-tile-at (x y)
-  "get a tile at x y location"
-  (aref (dev-tiles *dev*) x y))
-;;==============================================================================
-(defun get-prim-def (name)
-  "get a prim-def by name"
-  (gethash name (dev-prim-defs *dev*)))
-;;==============================================================================
-(defun get-element (name &key of) ;of is prim-def
-  (gethash name (prim-def-elements of)))
-
-
-(defgeneric show (thing))
-
-(defmethod show ((tile TILE))
-  (format t "TILE (~d,~d) ~S  type ~S  contains prim-sites: "
-	  (tile-x tile) (tile-y tile) (tile-name tile) (tile-type tile))
-  (print (keys (tile-prim-sites tile)))
-  nil
-)
-
-(defmethod show ((pd PRIM-DEF))
-  (format t "PRIM-DEF ~S~%. Pins:" (prim-def-name pd))
-  (print  (keys (prim-def-pins pd)))
-  (format t "~%Elements:")
-  (print (keys (prim-def-elements pd)))
-  nil)
-
-(defmethod show ((ps PRIM-SITE))
-  (format t "PRIM-SITE ~S is a ~S (~S) at tile ~S"
-	  (prim-site-name ps)
-	  (prim-def-name (prim-site-prim-def ps))
-	  (prim-site-bond ps)
-	  (tile-name  (prim-site-tile ps)))
-   nil)
