@@ -1,3 +1,4 @@
+
 ;;;; cl-fpgasm-device.lisp
 #|******************************************************************************
  Copyright 2012 Victor Yurkovsky
@@ -25,7 +26,8 @@
 
 (defun read-file (name)
   (with-open-file (in name)
-    (setf *raw* (read in)))
+    (let ((*package* (find-package "CL-FPGASM-DEVICE")))
+      (setf *raw* (read in))))
 )
 ;;==============================================================================
 (defun load-device (&key (name (asdf:system-relative-pathname 'cl-fpgasm-device #p"data/xc3s200.tweaked")))
@@ -70,13 +72,13 @@
 ;; And if type is not supported, 
 ;;
 (defmethod parse-xdlrc-expr (type rest dev container)
-  (format t "Unhandled type ~S~%" type)
-  (error "Unhandled type in parse-xdlrc-expr")
+  (error "Unhandled type in parse-xdlrc-expr - TYPE ~S package ~S" type *package* )
 )
 ;;==============================================================================
 ;; XDL_RESOURCE_REPORT version device tech
 ;;
 (defmethod parse-xdlrc-expr ((type (eql 'xdl_resource_report)) rest dev unused)
+  (print "XDL RESOURCE parser")
   (destructuring-bind (version device tech &rest expr) rest
     (declare (ignore version))
     (setf dev (dev-init)
@@ -115,7 +117,7 @@
 		       collect j)
 		    (tile-prim-sites tile)))
 	
-	(set n1 tile) ;BIND to name
+	(set n1 tile) ;BIND symbol n1 to name
 )))
 
 ;;==============================================================================
@@ -163,6 +165,11 @@
       (loop for expr in exprs
 	 do (parse-xdlrc expr dev data))
       (set name data) ;BIND to name
+
+      
+
+      (export (list name) *package* )
+ (print "DONE")
       data)))
 
 

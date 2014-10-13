@@ -1,6 +1,6 @@
 ;;;; package.lisp
 
 (defpackage #:cl-fpgasm-device
-  (:nicknames :device)
+  (:nicknames :devi)
   (:use #:cl))
 
