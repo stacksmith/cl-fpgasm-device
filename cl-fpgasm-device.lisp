@@ -30,11 +30,12 @@
       (setf *raw* (read in))))
 )
 ;;==============================================================================
-(defun load-device (&key (name (asdf:system-relative-pathname 'cl-fpgasm-device #p"data/xc3s200.tweaked")))
-  (parse-xdlrc (read-file name))
-  (export 'devi::*dev* :devi)
-  t
-)
+;(defun load-device (&key) (name (asdf:system-relative-pathname 'cl-fpgasm-device #p"data/xc3s200.tweaked")))
+(defun load-device (&key (name (asdf:system-relative-pathname 'cl-fpgasm-device #p"data/xc7a100t.tweaked")))
+       (parse-xdlrc (read-file name))
+       (export 'devi::*dev* :devi)
+       t)
+
 
 (defstruct dev 
   name                  ;name of device
